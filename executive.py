@@ -3,14 +3,14 @@ from docx import Document
 from docx.shared import RGBColor
 
 def ejecutivo(nombre,objetivo,bi,estado,oportunidades=None):
-    d=Document(); d.add_heading('DataAgents AI 9.0 | Informe ejecutivo',0); d.add_paragraph(nombre); d.add_paragraph(objetivo)
+    d=Document(); d.add_heading('DataAgents AI 9.1 | Informe ejecutivo',0); d.add_paragraph(nombre); d.add_paragraph(objetivo)
     d.add_heading('Decisiones y hallazgos',1)
     for k in ('interprete','informes'):
         r=estado['resultados'].get(k)
         if r:
             d.add_heading(k.capitalize(),2); d.add_paragraph(r['resumen'])
             for h in r['hallazgos']: d.add_paragraph(h,style='List Bullet')
-    if 'informes' not in estado['resultados']: d.add_paragraph('Síntesis IA pendiente; resultados parciales.')
+    if len(estado['resultados'])<4: d.add_paragraph('Informe parcial. Agentes pendientes: '+', '.join(k for k in ('auditor','analista','interprete','informes') if k not in estado['resultados']))
     d.add_heading('Hallazgos locales y acciones sugeridas',1)
     for h in oportunidades or []:
         d.add_heading(h['tipo']+' — '+h['variable'],2); d.add_paragraph(h['detalle']); d.add_paragraph(h['accion'])

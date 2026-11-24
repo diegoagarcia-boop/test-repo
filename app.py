@@ -13,14 +13,14 @@ from executive import ejecutivo
 from strategy import oportunidades,tendencia
 from agents import solicitar
 import asyncio
-st.set_page_config(page_title='DataAgents AI 9.0',layout='wide')
+st.set_page_config(page_title='DataAgents AI 9.1',layout='wide')
 st.markdown("""<style>
 [data-testid="stSidebar"] {background:#0F172A;color:#F1F5F9}
 [data-testid="stSidebar"] label,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#E2E8F0}
 [data-testid="stMetric"] {background:white;border:1px solid #DCE4EF;border-radius:12px;padding:16px;box-shadow:0 2px 5px #0f172a0b}
 [data-testid="stExpander"] {background:white;border-radius:10px}
 </style>""",unsafe_allow_html=True)
-st.title('DataAgents AI 9.0'); st.caption('Autonomous Business Intelligence · Decisiones basadas en evidencia')
+st.title('DataAgents AI 9.1'); st.caption('Autonomous Business Intelligence · Decisiones basadas en evidencia')
 def secreto(k):
     try: return st.secrets.get(k,os.getenv(k,''))
     except Exception: return os.getenv(k,'')
@@ -154,12 +154,15 @@ with t5:
     if st.button('Reiniciar agentes'):
         for v in e.values(): v.clear()
         st.session_state.pop('exports9',None)
-    if st.button('Ejecutar / continuar análisis integral',disabled=not consent or not any(claves.values()) or len(e['resultados'])==4):
+    pendientes=[k for k,_ in ETAPAS if k not in e['resultados']]
+    elegido=st.selectbox('Agente a recuperar',[None]+pendientes,format_func=lambda k: dict(ETAPAS).get(k,'Todos los pendientes'))
+    if st.button('Ejecutar / continuar análisis',disabled=not consent or not any(claves.values()) or not pendientes):
         if time.time()-st.session_state.get('ultima',0)<15: st.warning('Espera 15 segundos')
         else:
             st.session_state.pop('exports9',None); st.session_state.ultima=time.time(); msg=st.empty(); payload={'objetivo':objetivo,'bi':evidencia,'oportunidades':oportunidades_bi,'tablas':perfiles,'relaciones_candidatas':rel,'transformaciones':cambios,'analitica':{k:p['patrones'][:8] for k,p in perfiles.items()}};
-            try: ejecutar_agentes(payload,claves,modelos,e,lambda t,p,m:msg.info(f'{t} · {p} · {m} · {len(e["resultados"])}/4'))
+            try: ejecutar_agentes(payload,claves,modelos,e,lambda t,p,m:msg.info(f'{t} · {p} · {m} · {len(e["resultados"])}/4'),solo=elegido)
             except Exception: st.error('No se pudo conectar con los proveedores.')
+    if len(e['resultados'])<4: st.warning('Análisis parcial. Pendientes: '+', '.join(t for k,t in ETAPAS if k not in e['resultados']))
     st.write(f"Agentes completados: {len(e['resultados'])}/4")
     for slug,t in ETAPAS:
         if slug in e['resultados']:
@@ -170,6 +173,7 @@ with t5:
     if e['tiempos']: st.dataframe(pd.DataFrame([{'Agente':k,'Segundos':v} for k,v in e['tiempos'].items()]),hide_index=True)
     st.caption('Tiempo máximo de espera IA: 180 segundos; puedes continuar resultados parciales.')
 with t6:
+    if len(e['resultados'])<4: st.warning('Informe parcial: incluye evidencia local y agentes disponibles.')
     st.download_button('Descargar informe ejecutivo DOCX',ejecutivo(a.name,objetivo,evidencia,e,oportunidades_bi),'informe_ejecutivo.docx')
     st.caption('Cifras calculadas por Python; narrativa de IA no verificada automáticamente.'); st.dataframe(resumen)
     if 'informes' in e['resultados']: st.write(e['resultados']['informes']['resumen'])
