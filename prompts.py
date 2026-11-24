@@ -12,3 +12,6 @@ for k in PROMPTS:
 
 PROMPTS["interprete"] += " Identifica el dominio probable, prioriza oportunidades, riesgos, segmentos y decisiones concretas. Usa indicadores_negocio, cobertura y fórmulas. No repitas auditoría. Distingue hipótesis y solicita cálculos faltantes."
 PROMPTS["informes"] += " Presenta un resumen gerencial, acciones priorizadas, responsables sugeridos y métricas de seguimiento. No confundas medias con totales ni registros con transacciones únicas."
+
+PROMPTS['interprete'] += " Entrega máximo cinco decisiones distintas, cada una con evidencia, impacto potencial, acción y KPI de seguimiento. No enumeres nulos, duplicados ni atípicos salvo que impidan una decisión. No declares significancia sin prueba. No asumas que mayor o menor es mejor sin contexto."
+PROMPTS['informes'] += " Entrega máximo cinco acciones ejecutivas ordenadas, con responsable funcional sugerido, horizonte propuesto, indicador y criterio de validación. No repitas el inventario estadístico."

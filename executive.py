@@ -2,8 +2,8 @@ import io
 from docx import Document
 from docx.shared import RGBColor
 
-def ejecutivo(nombre,objetivo,bi,estado):
-    d=Document(); d.add_heading('DataAgents AI 8.0 | Informe ejecutivo',0); d.add_paragraph(nombre); d.add_paragraph(objetivo)
+def ejecutivo(nombre,objetivo,bi,estado,oportunidades=None):
+    d=Document(); d.add_heading('DataAgents AI 9.0 | Informe ejecutivo',0); d.add_paragraph(nombre); d.add_paragraph(objetivo)
     d.add_heading('Decisiones y hallazgos',1)
     for k in ('interprete','informes'):
         r=estado['resultados'].get(k)
@@ -11,9 +11,12 @@ def ejecutivo(nombre,objetivo,bi,estado):
             d.add_heading(k.capitalize(),2); d.add_paragraph(r['resumen'])
             for h in r['hallazgos']: d.add_paragraph(h,style='List Bullet')
     if 'informes' not in estado['resultados']: d.add_paragraph('Síntesis IA pendiente; resultados parciales.')
+    d.add_heading('Hallazgos locales y acciones sugeridas',1)
+    for h in oportunidades or []:
+        d.add_heading(h['tipo']+' — '+h['variable'],2); d.add_paragraph(h['detalle']); d.add_paragraph(h['accion'])
     d.add_heading('Evidencia calculada',1)
     for r in bi:
-        d.add_heading(r['indicador'],2); d.add_paragraph(f"Valor: {r['valor']} | Cobertura: {r['validos']}/{r['filas']} | Operación: {r['formula']}")
+        d.add_heading(r['indicador'],2); d.add_paragraph(f"Valor: {r['valor']} | Cobertura: {r['validos']}/{r['filas']} | Operación: {r['formula']['op']}")
         if r.get('grupos'):
             t=d.add_table(rows=1,cols=2); t.style='Light Shading Accent 1'; t.rows[0].cells[0].text='Grupo'; t.rows[0].cells[1].text='Valor'
             for g in r['grupos']:

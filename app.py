@@ -10,16 +10,17 @@ from agents import ejecutar_agentes,ETAPAS
 from exports import exportar_libro
 from bi import calcular, automaticos
 from executive import ejecutivo
+from strategy import oportunidades,tendencia
 from agents import solicitar
 import asyncio
-st.set_page_config(page_title='DataAgents AI 8.0',layout='wide')
+st.set_page_config(page_title='DataAgents AI 9.0',layout='wide')
 st.markdown("""<style>
 [data-testid="stSidebar"] {background:#0F172A;color:#F1F5F9}
 [data-testid="stSidebar"] label,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#E2E8F0}
 [data-testid="stMetric"] {background:white;border:1px solid #DCE4EF;border-radius:12px;padding:16px;box-shadow:0 2px 5px #0f172a0b}
 [data-testid="stExpander"] {background:white;border-radius:10px}
 </style>""",unsafe_allow_html=True)
-st.title('DataAgents AI 8.0'); st.caption('Intelligent Business Discovery · Decisiones basadas en evidencia')
+st.title('DataAgents AI 9.0'); st.caption('Autonomous Business Intelligence · Decisiones basadas en evidencia')
 def secreto(k):
     try: return st.secrets.get(k,os.getenv(k,''))
     except Exception: return os.getenv(k,'')
@@ -45,7 +46,7 @@ except Exception as e: st.error('No se pudo procesar: '+str(e)); st.stop()
 resumen=pd.DataFrame([{'Tabla':k,'Registros':len(d),'Variables':len(d.columns),'Nulos':sum(perfiles[k]['nulos_por_columna'].values()),'Duplicados':perfiles[k]['duplicados_exactos']} for k,d in tabs.items()]);
 for col,(label,v) in zip(st.columns(4),[('Tablas',len(tabs)),('Registros',sum(map(len,tabs.values()))),('Relaciones candidatas',len(rel)) if len(tabs)>1 else ('Variables',int(resumen.Variables.sum())),('Nulos',int(resumen.Nulos.sum()))]): col.metric(label,v)
 firma=hashlib.sha256(a.getvalue()+str((region,dup,normal,objetivo,modelos)).encode()).hexdigest()
-if st.session_state.get('firma')!=firma: st.session_state.firma=firma; st.session_state.estado={'resultados':{},'modelos':{},'eventos':[],'tiempos':{}}; st.session_state.pop('exports8',None)
+if st.session_state.get('firma')!=firma: st.session_state.firma=firma; st.session_state.estado={'resultados':{},'modelos':{},'eventos':[],'tiempos':{}}; st.session_state.pop('exports9',None)
 e=st.session_state.estado
 consent=st.checkbox('Autorizo enviar resúmenes de datos públicos o ficticios a la IA')
 for k in tabs: perfiles[k]['patrones']=descubrir(tabs[k],perfiles[k])
@@ -58,6 +59,7 @@ with tbi:
     ids=st.multiselect('Autorizar cruces para inteligencia de negocios',range(len(candidatos)),format_func=lambda i:str(candidatos[i]))
     bd=cruzar(tabs,[candidatos[i] for i in ids],base)
     evidencia=automaticos(bd)
+    oportunidades_bi=oportunidades(bd)
     st.caption('Indicadores automáticos descriptivos. Confirme el significado de las medidas antes de tomar decisiones.')
     op=st.selectbox('Construir indicador',['count','distinct','sum','mean','median','product','difference_product','ratio'])
     cols=list(bd.columns); nums=[c for c in cols if pd.api.types.is_numeric_dtype(bd[c])]
@@ -75,14 +77,34 @@ with tbi:
             if r.get('grupos'): st.plotly_chart(px.bar(pd.DataFrame(r['grupos']),x='grupo',y='valor'),key=f'bi{i}')
     bf=hashlib.sha256(json.dumps([base,ids,evidencia],default=str).encode()).hexdigest()
     if st.session_state.get('bf')!=bf:
-        st.session_state.bf=bf; e['resultados'].clear();e['modelos'].clear();e['tiempos'].clear();e['eventos'].clear();st.session_state.pop('exports8',None)
+        st.session_state.bf=bf; e['resultados'].clear();e['modelos'].clear();e['tiempos'].clear();e['eventos'].clear();st.session_state.pop('exports9',None)
 with t1:
+    st.header('Panel ejecutivo')
+    st.caption('Brechas y asociaciones descriptivas; la dirección deseable depende del negocio.')
+    for h in oportunidades_bi[:5]:
+        with st.container(border=True):
+            st.markdown('**'+h['tipo']+' · '+h['variable']+'**'); st.write(h['detalle']); st.caption(h['accion'])
+    fechas=[c for c,r in perfil(bd)['roles'].items() if r=='Fecha']
+    medidas=perfil(bd)['columnas_numericas']
+    if fechas:
+        f=st.selectbox('Fecha de tendencia',fechas); m=st.selectbox('Medida temporal',[None]+medidas,format_func=lambda x:x or 'Conteo de registros'); tt=tendencia(bd,f,m)
+        if not tt.empty: st.plotly_chart(px.line(tt,x='mes',y='valor',markers=True),key='trend9'); st.dataframe(tt[['mes','count','valor','variacion_pct']],hide_index=True)
+    if medidas:
+        st.subheader('Escenario hipotético'); m=st.selectbox('Medida del escenario',medidas); cambio=st.slider('Variación propuesta (%)',-80,80, -30); actual=bd[m].mean(); st.metric('Promedio simulado',f'{actual*(1+cambio/100):,.2f}',f'{cambio}%'); st.caption('Simulación aritmética, no predicción ni efecto causal.')
     st.dataframe(resumen,hide_index=True)
     for r in evidencia[:4]: st.metric(r['indicador'],str(r['valor']))
     for slug in ('interprete','informes'):
         if slug in e['resultados']: st.write(e['resultados'][slug]['resumen'])
     if 'informes' not in e['resultados']: st.info('Ejecute los agentes para obtener recomendaciones ejecutivas.')
 with tchat:
+    st.subheader('Consulta calculada localmente')
+    qc=st.selectbox('Operación de consulta',['count','distinct','sum','mean','median'],key='qc'); qcols=list(bd.columns) if qc=='distinct' else perfil(bd)['columnas_numericas']; qv=st.selectbox('Variable de consulta',qcols,index=0 if qcols else None,key='qv') if qc!='count' else None
+    qg=st.selectbox('Agrupar consulta',[None]+list(bd.columns),key='qg')
+    if st.button('Calcular consulta'):
+        try:
+            qr=calcular(bd,{'op':qc,'col':qv,'grupo':qg,'nombre':'Consulta'}); st.metric('Resultado',str(qr['valor'])); st.caption(f"Cobertura: {qr['validos']}/{qr['filas']}");
+            if qr.get('grupos'): st.dataframe(pd.DataFrame(qr['grupos']))
+        except Exception as ex: st.warning(str(ex))
     pregunta=st.text_input('Pregunta sobre los datos')
     if st.button('Consultar evidencia',disabled=not consent or not pregunta or not any(claves.values())):
         for p,m in modelos:
@@ -131,11 +153,11 @@ with t4:
 with t5:
     if st.button('Reiniciar agentes'):
         for v in e.values(): v.clear()
-        st.session_state.pop('exports8',None)
+        st.session_state.pop('exports9',None)
     if st.button('Ejecutar / continuar análisis integral',disabled=not consent or not any(claves.values()) or len(e['resultados'])==4):
         if time.time()-st.session_state.get('ultima',0)<15: st.warning('Espera 15 segundos')
         else:
-            st.session_state.pop('exports8',None); st.session_state.ultima=time.time(); msg=st.empty(); payload={'objetivo':objetivo,'bi':evidencia,'tablas':perfiles,'relaciones_candidatas':rel,'transformaciones':cambios,'analitica':{k:p['patrones'][:8] for k,p in perfiles.items()}};
+            st.session_state.pop('exports9',None); st.session_state.ultima=time.time(); msg=st.empty(); payload={'objetivo':objetivo,'bi':evidencia,'oportunidades':oportunidades_bi,'tablas':perfiles,'relaciones_candidatas':rel,'transformaciones':cambios,'analitica':{k:p['patrones'][:8] for k,p in perfiles.items()}};
             try: ejecutar_agentes(payload,claves,modelos,e,lambda t,p,m:msg.info(f'{t} · {p} · {m} · {len(e["resultados"])}/4'))
             except Exception: st.error('No se pudo conectar con los proveedores.')
     st.write(f"Agentes completados: {len(e['resultados'])}/4")
@@ -146,12 +168,12 @@ with t5:
                 for h in e['resultados'][slug]['hallazgos']: st.write('• '+h)
     if e['eventos']: st.dataframe(pd.DataFrame(e['eventos']))
     if e['tiempos']: st.dataframe(pd.DataFrame([{'Agente':k,'Segundos':v} for k,v in e['tiempos'].items()]),hide_index=True)
-    st.caption('Tiempo máximo de espera IA: 115 segundos; puedes continuar resultados parciales.')
+    st.caption('Tiempo máximo de espera IA: 180 segundos; puedes continuar resultados parciales.')
 with t6:
-    st.download_button('Descargar informe ejecutivo DOCX',ejecutivo(a.name,objetivo,evidencia,e),'informe_ejecutivo.docx')
+    st.download_button('Descargar informe ejecutivo DOCX',ejecutivo(a.name,objetivo,evidencia,e,oportunidades_bi),'informe_ejecutivo.docx')
     st.caption('Cifras calculadas por Python; narrativa de IA no verificada automáticamente.'); st.dataframe(resumen)
     if 'informes' in e['resultados']: st.write(e['resultados']['informes']['resumen'])
     if st.button('Preparar informes'):
-        st.session_state['exports8']=(firma,exportar_libro(original,tabs,resumen,perfiles,rel,e,objetivo,a.name,cambios))
-    if st.session_state.get('exports8',('',{}))[0]==firma:
-        for ext,b in st.session_state['exports8'][1].items(): st.download_button('Descargar '+ext.upper(),b,'informe.'+ext)
+        st.session_state['exports9']=(firma,exportar_libro(original,tabs,resumen,perfiles,rel,e,objetivo,a.name,cambios))
+    if st.session_state.get('exports9',('',{}))[0]==firma:
+        for ext,b in st.session_state['exports9'][1].items(): st.download_button('Descargar '+ext.upper(),b,'informe.'+ext)
