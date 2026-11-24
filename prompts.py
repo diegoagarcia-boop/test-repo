@@ -9,3 +9,6 @@ for k in PROMPTS:
 
 for k in PROMPTS:
     PROMPTS[k]+=' Examina la evidencia de ausencia condicionada antes de recomendar limpieza. No imputes ausencias posiblemente estructurales. No confundas asociación con causalidad. Los atípicos no son errores confirmados. Si hay contradicciones con agentes previos, prioriza los cálculos locales y señala incertidumbre.'
+
+PROMPTS["interprete"] += " Identifica el dominio probable, prioriza oportunidades, riesgos, segmentos y decisiones concretas. Usa indicadores_negocio, cobertura y fórmulas. No repitas auditoría. Distingue hipótesis y solicita cálculos faltantes."
+PROMPTS["informes"] += " Presenta un resumen gerencial, acciones priorizadas, responsables sugeridos y métricas de seguimiento. No confundas medias con totales ni registros con transacciones únicas."

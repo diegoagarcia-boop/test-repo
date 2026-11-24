@@ -5,7 +5,7 @@ ETAPAS=[('auditor','Auditor y limpiador'),('analista','Analista estadístico'),(
 async def solicitar(p,m,k,prompt):
     async with httpx.AsyncClient(timeout=18) as c:
         if p=='Groq':
-            r=await c.post('https://api.groq.com/openai/v1/chat/completions',headers={'Authorization':'Bearer '+k},json={'model':m,'messages':[{'role':'user','content':prompt}],'response_format':{'type':'json_object'},'max_completion_tokens':2500}); r.raise_for_status(); raw=r.json()['choices'][0]['message']['content']
+            r=await c.post('https://api.groq.com/openai/v1/chat/completions',headers={'Authorization':'Bearer '+k},json={'model':m,'messages':[{'role':'user','content':prompt}],'response_format':{'type':'json_object'},'max_completion_tokens':4000}); r.raise_for_status(); raw=r.json()['choices'][0]['message']['content']
         else:
             r=await c.post('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent',headers={'x-goog-api-key':k},json={'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'responseMimeType':'application/json','maxOutputTokens':3500}}); r.raise_for_status(); raw=''.join(x.get('text','') for x in r.json()['candidates'][0]['content']['parts'] if not x.get('thought'))
     obj=json.loads(raw)
@@ -14,7 +14,7 @@ async def solicitar(p,m,k,prompt):
 
 def compacto(payload,slug):
     keys={'auditor':['registros','nulos_por_columna','duplicados_exactos','alertas','roles'],'analista':['indicadores_numericos','frecuencias_categoricas','correlaciones'],'interprete':['roles','unicidad','frecuencias_categoricas','indicadores_numericos','correlaciones'],'informes':['registros','nulos_por_columna','duplicados_exactos','indicadores_numericos']}[slug]
-    return {'objetivo':payload['objetivo'],'relaciones':payload['relaciones_candidatas'],'tablas':{n:{k:p[k] for k in keys if k in p} for n,p in payload['tablas'].items()},'analitica':payload.get('analitica',[]),'transformaciones':payload['transformaciones'] if slug=='auditor' else {}}
+    return {'objetivo':payload['objetivo'],'indicadores_negocio':payload.get('bi',[])[:12] if slug in ('interprete','informes') else [],'relaciones':payload['relaciones_candidatas'],'tablas':{n:{k:p[k] for k in keys if k in p} for n,p in payload['tablas'].items()},'analitica':payload.get('analitica',[]),'transformaciones':payload['transformaciones'] if slug=='auditor' else {}}
 
 def ejecutar_agentes(resumen,claves,modelos,estado,progreso=lambda *a:None):
     async def run():
@@ -24,7 +24,7 @@ def ejecutar_agentes(resumen,claves,modelos,estado,progreso=lambda *a:None):
             data=compacto(resumen,slug)
             if slug in ('interprete','informes'): data['anteriores']=estado['resultados']
             raw=json.dumps(data,ensure_ascii=False,default=str)
-            if len(raw)>28000:
+            if len(raw)>55000:
                 estado['eventos'].append({'agente':titulo,'error':'Resumen excede presupuesto; análisis local disponible'}); return
             prompt=PROMPTS[slug]+' Devuelve JSON con resumen (texto) y hallazgos (lista de textos). No inventes cifras.\n'+raw
             async with sem:
