@@ -1,0 +1,5 @@
+tipo,canal,descripcion
+Peticion,Web,Solicitud de informacion sobre horarios
+Queja,Telefono,Demora en la atencion
+Reclamo,Web,No se entrego el documento solicitado
+Peticion,Presencial,Consulta sobre requisitos

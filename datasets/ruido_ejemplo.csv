@@ -1,0 +1,5 @@
+fecha,valor,detalle
+2026-01-01,100,correcto
+,200,
+2026-02-01,,faltante
+03/01/2026,300,
