@@ -42,7 +42,7 @@ def exportar(original,df,antes,datos,estado):
     out['xlsx']=b.getvalue(); return out
 
 def exportar_libro(original,tabs,resumen,perfiles,rel,estado):
-    titulo='DataAgents AI 4.0 - Informe integral'; doc=Document(); doc.add_heading(titulo,0); styles=getSampleStyleSheet(); story=[Paragraph(titulo,styles['Title'])];
+    titulo='DataAgents AI 5.0 - Informe integral'; doc=Document(); doc.add_heading(titulo,0); styles=getSampleStyleSheet(); story=[Paragraph(titulo,styles['Title'])];
     def texto(s):
         doc.add_paragraph(str(s)); story.append(Paragraph(escape(str(s)),styles['BodyText'])); story.append(Spacer(1,5))
     texto('Resultados calculados por Python. Relaciones candidatas; narrativa IA no verificada automáticamente.')
