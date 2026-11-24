@@ -16,6 +16,7 @@ def ejecutar_agentes(resumen, claves, modelos, estado, progreso=lambda *a:None):
                 if proveedor not in clientes: continue
                 for intento in range(2):
                     progreso(titulo,proveedor,modelo)
+                    inicio=time.monotonic()
                     try:
                         if proveedor=='Gemini':
                             r=clientes[proveedor].models.generate_content(model=modelo,contents=prompt,config={'response_mime_type':'application/json'})
@@ -27,10 +28,11 @@ def ejecutar_agentes(resumen, claves, modelos, estado, progreso=lambda *a:None):
                         if not isinstance(obj,dict) or not isinstance(obj.get('resumen'),str) or not isinstance(obj.get('hallazgos'),list) or not all(isinstance(x,str) for x in obj['hallazgos']): raise ValueError('Formato JSON inválido')
                         estado['resultados'][slug]=obj
                         estado['modelos'][slug]=f'{proveedor} / {modelo}'
+                        estado.setdefault('tiempos',{})[slug]=round(time.monotonic()-inicio,2)
                         break
                     except Exception as e:
                         codigo=getattr(e,'status_code',None) or getattr(e,'code',None)
-                        estado['eventos'].append({'agente':titulo,'proveedor':proveedor,'modelo':modelo,'error':str(codigo or type(e).__name__),'intento':intento+1})
+                        estado['eventos'].append({'agente':titulo,'proveedor':proveedor,'modelo':modelo,'error':str(codigo or type(e).__name__),'intento':intento+1,'segundos':round(time.monotonic()-inicio,2)})
                         if str(codigo) in ('500','502','503','504') and intento==0: time.sleep(5); continue
                         break
                 if slug in estado['resultados']: break

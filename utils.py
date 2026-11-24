@@ -83,23 +83,45 @@ def perfil(df):
             'advertencia': 'Las fechas en formato texto y números con caracteres mixtos requieren validación adicional.'}
 
 
-def limpiar(df):
+# Limpieza conservadora, con política regional explícita.
+def limpiar(df, region='Conservar ambiguas', duplicados=False, imputar=False):
     df=df.copy(); cambios=[]
     for c in df.select_dtypes(include=['object','string']).columns:
         s=df[c].map(lambda x:x.strip() if isinstance(x,str) else x).replace('',pd.NA)
         df[c]=s
         if re.search(r'fecha|date',c,re.I):
-            # ISO primero; fechas con barras ambiguas se conservan.
+            formatos=set(); pendientes=0; convertidas=0
             def convertir(x):
+                nonlocal pendientes,convertidas
                 if pd.isna(x): return x
-                if re.fullmatch(r'\d{4}-\d{2}-\d{2}',str(x)):
-                    t=pd.to_datetime(x,format='%Y-%m-%d',errors='coerce')
-                    if pd.notna(t): return t.strftime('%Y-%m-%d')
-                m=re.fullmatch(r'(\d{1,2})/(\d{1,2})/(\d{4})',str(x))
-                if m and int(m[1])>12:
-                    t=pd.to_datetime(x,format='%d/%m/%Y',errors='coerce')
-                    if pd.notna(t): return t.strftime('%Y-%m-%d')
-                return x
-            nuevo=s.map(convertir); cambios.append(f'{c}: fechas ambiguas o inválidas conservadas; revisar manualmente.'); df[c]=nuevo
-    cambios.append('Se recortaron espacios y se convirtieron cadenas vacías en nulos. No se imputaron valores ni se eliminaron duplicados.')
+                x=str(x); fmt=None
+                if re.fullmatch(r'\d{4}-\d{2}-\d{2}',x): fmt='%Y-%m-%d'
+                elif re.fullmatch(r'\d{1,2}/\d{1,2}/\d{4}',x):
+                    a,b,_=map(int,x.split('/')); formatos.add('Con barras')
+                    if region=='Día/mes/año' or a>12: fmt='%d/%m/%Y'
+                    elif region=='Mes/día/año' or b>12: fmt='%m/%d/%Y'
+                if fmt:
+                    formatos.add('ISO' if fmt=='%Y-%m-%d' else 'Con barras')
+                    t=pd.to_datetime(x,format=fmt,errors='coerce')
+                    if pd.notna(t):
+                        y=t.strftime('%Y-%m-%d'); convertidas+=int(y!=x); return y
+                pendientes+=1; return x
+            df[c]=s.map(convertir)
+            cambios.append(f'{c}: {len(formatos)} formatos reconocidos; {convertidas} conversiones; {pendientes} fechas pendientes.')
+    cambios.append('Espacios recortados y cadenas vacías convertidas a nulos.')
+    if duplicados:
+        n=len(df); df=df.drop_duplicates(); cambios.append(f'Duplicados eliminados: {n-len(df)}.')
+    if imputar:
+        for c in df.select_dtypes(include='number'):
+            n=int(df[c].isna().sum()); m=df[c].median()
+            if n and pd.notna(m): df[c]=df[c].astype(float).fillna(m); cambios.append(f'{c}: {n} nulos imputados con mediana {m}.')
     return df,cambios
+
+def perfil_avanzado(df):
+    p=perfil(df); p.pop('advertencia',None); p['atipicos_IQR']={}
+    for c in p['columnas_numericas'][:12]:
+        s=df[c].dropna(); q1,q3=s.quantile([.25,.75]); d=q3-q1
+        p['atipicos_IQR'][c]=int(((s<q1-1.5*d)|(s>q3+1.5*d)).sum()) if len(s)>=4 else None
+    corr=df[p['columnas_numericas'][:12]].corr(min_periods=4)
+    p['correlaciones']=json.loads(corr.to_json())
+    return p
