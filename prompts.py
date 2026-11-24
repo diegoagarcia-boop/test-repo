@@ -4,3 +4,5 @@ PROMPTS={
 'analista':BASE+' Evalúa distribuciones, indicadores, correlaciones y atípicos disponibles. No repitas el diagnóstico de calidad. Advierte límites de muestra.',
 'interprete':BASE+' Interpreta los hallazgos en contexto, sin asumir dominio desconocido. Explica implicaciones y preguntas pendientes. No repitas estadísticas.',
 'informes':BASE+' Sintetiza decisiones y recomendaciones priorizadas, con evidencia y limitaciones. Evita repetir párrafos de agentes anteriores.'}
+for k in PROMPTS:
+    PROMPTS[k]+=' Las frecuencias top son deliberadamente parciales: otras indica registros válidos fuera del listado, no datos faltantes. Las relaciones son candidatas, no confirmadas. No confundas repetición de clave foránea con duplicado de fila. No inventes indicadores de cruces no suministrados.'

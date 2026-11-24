@@ -1,84 +1,75 @@
-import os,json,hashlib,io,time
-import streamlit as st
+import os,json,hashlib,time,io
 import pandas as pd
+import streamlit as st
 import plotly.express as px
+from motor import cargar,perfil,relaciones,cruzar
+from utils import limpiar
 from agents import ejecutar_agentes,ETAPAS
-from utils import cargar_archivo,perfil_avanzado,limpiar
-from exports import exportar
-st.set_page_config(page_title='DataAgents AI 3.0',page_icon='📊',layout='wide')
-st.title('DataAgents AI 3.0'); st.caption('Inteligencia de negocios · Calidad · Analítica multiagente')
+from exports import exportar_libro
+st.set_page_config(page_title='DataAgents AI 4.0',layout='wide')
+st.title('DataAgents AI 4.0'); st.caption('Analítica relacional · Calidad · Inteligencia multiagente')
 def secreto(k):
     try: return st.secrets.get(k,os.getenv(k,''))
     except Exception: return os.getenv(k,'')
-claves={'Gemini':secreto('GEMINI_API_KEY'),'Groq':secreto('GROQ_API_KEY')}
+claves={p:secreto(p.upper()+'_API_KEY') for p in ['Groq','Gemini']}
 with st.sidebar:
-    st.header('Configuración')
+    st.header('Configuración'); pref=st.radio('Proveedor preferido',['Groq','Gemini']); q=st.text_input('Modelo Groq','openai/gpt-oss-120b'); g=st.text_input('Modelo Gemini','gemini-3.6-flash');
+    gr=[('Groq',q),('Groq','openai/gpt-oss-20b')]; gm=[('Gemini',g),('Gemini','gemini-3.5-flash-lite')]; modelos=list(dict.fromkeys(gr+gm if pref=='Groq' else gm+gr))
     for p,k in claves.items(): st.write(p+': '+('Configurado' if k else 'Sin clave'))
-    preferencia=st.radio('Proveedor preferido',['Groq','Gemini'])
-    g=st.text_input('Modelo Gemini','gemini-3.6-flash'); q=st.text_input('Modelo Groq','openai/gpt-oss-120b')
-    gm=[('Gemini',g),('Gemini','gemini-3.5-flash-lite')]; gr=[('Groq',q),('Groq','openai/gpt-oss-20b')]
-    modelos=list(dict.fromkeys(gm+gr if preferencia=='Gemini' else gr+gm))
-    st.subheader('Depuración')
-    region=st.selectbox('Interpretación de fechas con barras',['Conservar ambiguas','Día/mes/año','Mes/día/año'])
-    dup=st.checkbox('Eliminar duplicados exactos'); imp=st.checkbox('Imputar nulos numéricos con mediana')
-st.warning('Solo datos públicos o ficticios. Los resúmenes se envían a proveedores externos. Las cuotas gratuitas son compartidas.')
-a=st.file_uploader('Cargar CSV, XLSX o JSON (máximo 10 MB)',type=['csv','xlsx','json'])
+    region=st.selectbox('Fechas con barras',['Conservar ambiguas','Día/mes/año','Mes/día/año']); dup=st.checkbox('Eliminar duplicados exactos')
+st.warning('Solo datos públicos o ficticios. Los resúmenes se envían a proveedores externos. Cuotas gratuitas compartidas.')
+a=st.file_uploader('Cargar archivo (máximo 10 MB)',type=['xlsx','csv','json']); objetivo=st.text_input('Objetivo del análisis','Análisis integral de calidad y patrones')
 if not a: st.stop()
-try:
-    original=cargar_archivo(a); df,cambios=limpiar(original,region,dup,imp); antes=perfil_avanzado(original); datos=perfil_avanzado(df); datos['limpieza']=cambios
-except Exception as e: st.error('Archivo no procesable: '+str(e)); st.stop()
-firma=hashlib.sha256(a.getvalue()+str((region,dup,imp)).encode()).hexdigest()
-if st.session_state.get('firma')!=firma:
-    st.session_state.firma=firma; st.session_state.estado={'resultados':{},'modelos':{},'eventos':[],'tiempos':{}}
-estado=st.session_state.estado
-for col,(label,v) in zip(st.columns(4),[('Registros',len(df)),('Variables',len(df.columns)),('Completitud',f"{100-datos['porcentaje_nulos']:.2f}%"),('Duplicados',datos['duplicados_exactos'])]): col.metric(label,v)
-consent=st.checkbox('Confirmo que los datos son públicos o ficticios y autorizo enviar resúmenes a la IA')
-c1,c2=st.columns(2)
-if c2.button('Reiniciar análisis'):
-    for v in estado.values(): v.clear()
-if c1.button('Ejecutar / continuar análisis integral',type='primary',disabled=not consent or not any(claves.values()) or len(estado['resultados'])==4):
-    if time.time()-st.session_state.get('ultima_ejecucion',0)<15: st.warning('Espera 15 segundos entre ejecuciones.')
-    else:
-        st.session_state.ultima_ejecucion=time.time(); barra=st.progress(len(estado['resultados'])/4); mensaje=st.empty()
-        def avance(t,p,m): barra.progress(len(estado['resultados'])/4); mensaje.info(f'{t} · {p} · {m}')
-        try:
-            ok=ejecutar_agentes(datos,claves,modelos,estado,avance); barra.progress(len(estado['resultados'])/4)
-            if ok: mensaje.success('Cuatro agentes completados')
-            else: mensaje.warning('Servicio no disponible. Puedes continuar sin repetir etapas completadas.')
-        except Exception: mensaje.error('No fue posible iniciar los proveedores.')
-st.caption(f"Agentes completados: {len(estado['resultados'])}/4")
-t1,t2,t3,t4,t5=st.tabs(['Datos','Calidad','Analítica','Agentes','Informes'])
-with t1:
-    st.subheader('Datos depurados'); st.dataframe(df.head(100)); st.download_button('Descargar CSV',df.to_csv(index=False).encode('utf-8-sig'),'datos.csv')
-    with st.expander('Datos originales'): st.dataframe(original.head(100))
+def procesar(raw,nombre,region,dup):
+    b=io.BytesIO(raw); b.name=nombre; original=cargar(b); tabs={}; cambios={}
+    for k,d in original.items(): tabs[k],cambios[k]=limpiar(d,region,dup,False)
+    antes={k:perfil(d) for k,d in original.items()}; perfiles={k:perfil(d) for k,d in tabs.items()}; rel=relaciones(tabs,perfiles); return original,tabs,antes,perfiles,rel,cambios
+try: original,tabs,antes,perfiles,rel,cambios=procesar(a.getvalue(),a.name,region,dup)
+except Exception as e: st.error('No se pudo procesar: '+str(e)); st.stop()
+resumen=pd.DataFrame([{'Tabla':k,'Registros':len(d),'Variables':len(d.columns),'Nulos':sum(perfiles[k]['nulos_por_columna'].values()),'Duplicados':perfiles[k]['duplicados_exactos']} for k,d in tabs.items()]);
+for col,(label,v) in zip(st.columns(4),[('Tablas',len(tabs)),('Registros',sum(map(len,tabs.values()))),('Relaciones candidatas',len(rel)),('Nulos',int(resumen.Nulos.sum()))]): col.metric(label,v)
+firma=hashlib.sha256(a.getvalue()+str((region,dup,objetivo,modelos)).encode()).hexdigest()
+if st.session_state.get('firma')!=firma: st.session_state.firma=firma; st.session_state.estado={'resultados':{},'modelos':{},'eventos':[],'tiempos':{}}
+e=st.session_state.estado
+consent=st.checkbox('Autorizo enviar resúmenes de datos públicos o ficticios a la IA')
+t1,t2,t3,t4,t5,t6=st.tabs(['General','Tablas y calidad','Relaciones','Analítica','Agentes','Informes'])
+with t1: st.dataframe(resumen,hide_index=True)
 with t2:
-    st.subheader('Comparación de calidad'); st.dataframe(pd.DataFrame({'Antes':antes['nulos_por_columna'],'Después':datos['nulos_por_columna']})); st.write(f"Registros: {len(original)} → {len(df)}")
-    for c in cambios: st.markdown('- '+c)
-    st.plotly_chart(px.bar(x=list(datos['nulos_por_columna']),y=list(datos['nulos_por_columna'].values()),labels={'x':'Variable','y':'Valores faltantes'}),use_container_width=True)
+    k=st.selectbox('Tabla',list(tabs)); st.dataframe(tabs[k].head(100)); st.dataframe(pd.DataFrame({'Rol':perfiles[k]['roles'],'Nulos antes':antes[k]['nulos_por_columna'],'Nulos después':perfiles[k]['nulos_por_columna'],'Valores únicos':perfiles[k]['unicidad']})); st.dataframe(pd.DataFrame(perfiles[k]['alertas'])); st.write(cambios[k])
 with t3:
-    nums=datos['columnas_numericas']; cats=[c for c in datos['columnas_no_numericas'] if 1<df[c].nunique()<=30]
-    if nums:
-        st.dataframe(pd.DataFrame(datos['indicadores_numericos']).T); st.write('Atípicos por IQR (mínimo 4 observaciones)'); st.dataframe(pd.DataFrame([datos['atipicos_IQR']]))
-        n=st.selectbox('Variable numérica',nums); st.plotly_chart(px.histogram(df,x=n,title='Distribución de '+n),use_container_width=True)
-        if cats:
-            c=st.selectbox('Agrupar por',cats); op=st.radio('Agregación',['sum','mean','count'],horizontal=True,format_func=lambda x:{'sum':'Suma','mean':'Promedio','count':'Conteo'}[x]); agg=df.groupby(c,dropna=True)[n].agg(op).reset_index(); st.plotly_chart(px.bar(agg,x=c,y=n,title='Comparación por '+c),use_container_width=True)
-        if len(nums)>1: st.plotly_chart(px.imshow(df[nums[:12]].corr(min_periods=4),zmin=-1,zmax=1,title='Correlación de Pearson (mínimo 4 pares)'),use_container_width=True)
-    else: st.info('No hay variables numéricas.')
-    for c,f in datos['frecuencias_categoricas'].items():
-        if f: st.plotly_chart(px.bar(x=list(f),y=list(f.values()),labels={'x':c,'y':'Frecuencia'},title='Categorías más frecuentes'),use_container_width=True)
+    st.caption('Relaciones candidatas por coincidencia de nombres y valores; confirme su significado antes de utilizar cruces.'); st.dataframe(pd.DataFrame(rel));
 with t4:
-    for slug,titulo in ETAPAS:
-        if slug in estado['resultados']:
-            with st.expander(titulo,expanded=True):
-                st.caption(estado['modelos'][slug]+' · '+str(estado['tiempos'].get(slug,'—'))+' s (intento exitoso)'); obj=estado['resultados'][slug]; st.write(obj['resumen'])
-                for h in obj['hallazgos']: st.markdown('- '+h)
-    if estado['eventos']: st.dataframe(pd.DataFrame(estado['eventos']))
+    k2=st.selectbox('Tabla de análisis',list(tabs)); d=tabs[k2]; rr=[r for r in rel if r['hijo']==k2]; seleccion=st.multiselect('Relaciones autorizadas para cruzar',list(range(len(rr))),format_func=lambda i:f"{rr[i]['hijo']}.{rr[i]['foranea']} → {rr[i]['padre']}.{rr[i]['clave']}")
+    if seleccion: d=cruzar(tabs,[rr[i] for i in seleccion],k2)
+    p=perfil(d); nums=p['columnas_numericas']; cats=list(p['frecuencias_categoricas']);
+    if nums: st.dataframe(pd.DataFrame(p['indicadores_numericos']).T)
+    if cats:
+        c=st.selectbox('Categoría',cats); f=p['frecuencias_categoricas'][c]; st.write(f"{f['categorias']} categorías; {f['otras']} registros fuera del top 20"); st.plotly_chart(px.bar(x=list(f['top']),y=list(f['top'].values()),labels={'x':c,'y':'Frecuencia'}))
+    if nums:
+        n=st.selectbox('Medida',nums); st.plotly_chart(px.histogram(d,x=n));
+        if cats: st.plotly_chart(px.bar(d.groupby(c)[n].sum(min_count=1).reset_index(),x=c,y=n,title='Suma por categoría'))
+        if len(nums)>1: st.dataframe(d[nums].corr(min_periods=4))
+        if len(nums)>1:
+            x=st.selectbox('Factor A',nums); y=st.selectbox('Factor B',nums,index=1); prod=d[x]*d[y]; st.metric('Suma del producto (A × B)',f'{prod.sum(min_count=1):,.2f}'); st.caption(f'{prod.notna().sum()} filas válidas; no equivale necesariamente a ingresos.');
 with t5:
-    if 'informes' in estado['resultados']:
-        obj=estado['resultados']['informes']; st.subheader('Resumen ejecutivo'); st.write(obj['resumen'])
-        for h in obj['hallazgos']: st.markdown('- '+h)
-        try:
-            for ext,contenido in exportar(original,df,antes,datos,estado).items(): st.download_button('Descargar '+ext.upper(),contenido,'informe.'+ext)
-        except Exception: st.error('No fue posible generar los informes.')
-        st.download_button('Resultados técnicos JSON',json.dumps(estado,ensure_ascii=False,indent=2),'resultados.json')
-    else: st.info('Ejecuta el análisis integral para generar informes.')
+    if st.button('Reiniciar agentes'): [v.clear() for v in e.values()]
+    if st.button('Ejecutar / continuar análisis integral',disabled=not consent or not any(claves.values()) or len(e['resultados'])==4):
+        if time.time()-st.session_state.get('ultima',0)<15: st.warning('Espera 15 segundos')
+        else:
+            st.session_state.ultima=time.time(); msg=st.empty(); payload={'objetivo':objetivo,'tablas':perfiles,'relaciones_candidatas':rel,'transformaciones':cambios};
+            if len(json.dumps(payload,default=str))>100000: st.error('Resumen demasiado grande para enviar; reduce el número de variables.')
+            else:
+                try: ejecutar_agentes(payload,claves,modelos,e,lambda t,p,m:msg.info(f'{t} · {p} · {m}'))
+                except Exception: st.error('No se pudo conectar con los proveedores.')
+    st.write(f"Agentes completados: {len(e['resultados'])}/4")
+    for slug,t in ETAPAS:
+        if slug in e['resultados']:
+            with st.expander(t,expanded=True):
+                st.caption(e['modelos'][slug]); st.write(e['resultados'][slug]['resumen']);
+                for h in e['resultados'][slug]['hallazgos']: st.write('• '+h)
+    st.dataframe(pd.DataFrame(e['eventos']))
+with t6:
+    st.caption('Cifras calculadas por Python; narrativa de IA no verificada automáticamente.'); st.dataframe(resumen)
+    if 'informes' in e['resultados']: st.write(e['resultados']['informes']['resumen'])
+    if st.button('Preparar informes'):
+        for ext,b in exportar_libro(original,tabs,resumen,perfiles,rel,e).items(): st.download_button('Descargar '+ext.upper(),b,'informe.'+ext)
