@@ -81,3 +81,25 @@ def perfil(df):
             'duplicados_exactos': int(df.duplicated().sum()),
             'indicadores_numericos': resumen_num, 'frecuencias_categoricas': frecuencia,
             'advertencia': 'Las fechas en formato texto y números con caracteres mixtos requieren validación adicional.'}
+
+
+def limpiar(df):
+    df=df.copy(); cambios=[]
+    for c in df.select_dtypes(include=['object','string']).columns:
+        s=df[c].map(lambda x:x.strip() if isinstance(x,str) else x).replace('',pd.NA)
+        df[c]=s
+        if re.search(r'fecha|date',c,re.I):
+            # ISO primero; fechas con barras ambiguas se conservan.
+            def convertir(x):
+                if pd.isna(x): return x
+                if re.fullmatch(r'\d{4}-\d{2}-\d{2}',str(x)):
+                    t=pd.to_datetime(x,format='%Y-%m-%d',errors='coerce')
+                    if pd.notna(t): return t.strftime('%Y-%m-%d')
+                m=re.fullmatch(r'(\d{1,2})/(\d{1,2})/(\d{4})',str(x))
+                if m and int(m[1])>12:
+                    t=pd.to_datetime(x,format='%d/%m/%Y',errors='coerce')
+                    if pd.notna(t): return t.strftime('%Y-%m-%d')
+                return x
+            nuevo=s.map(convertir); cambios.append(f'{c}: fechas ambiguas o inválidas conservadas; revisar manualmente.'); df[c]=nuevo
+    cambios.append('Se recortaron espacios y se convirtieron cadenas vacías en nulos. No se imputaron valores ni se eliminaron duplicados.')
+    return df,cambios

@@ -1,76 +1,68 @@
-import json
-import os
+import os,json,hashlib,io
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from agents import ejecutar_agentes, ETAPAS
-from utils import cargar_archivo, perfil
-
-st.set_page_config(page_title='DataAgents AI', page_icon='📊', layout='wide')
-st.title('📊 DataAgents AI')
-st.caption('Proyecto integrador · Sistema multiagente de análisis de datos genéricos')
-st.info('Versión inicial: análisis descriptivo con Python y 4 agentes Gemini. No reemplaza una auditoría humana.')
-
-archivo = st.file_uploader('Sube CSV, Excel (.xlsx) o JSON (máximo 10 MB)', type=['csv','xlsx','json'])
-if archivo is not None:
-    try:
-        df = cargar_archivo(archivo)
-        datos = perfil(df)
-    except Exception as exc:
-        st.error(f'No se pudo procesar el archivo: {exc}')
-        st.stop()
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric('Registros', datos['registros'])
-    col2.metric('Columnas', datos['columnas'])
-    col3.metric('Datos faltantes', f"{datos['porcentaje_nulos']} %")
-    col4.metric('Duplicados exactos', datos['duplicados_exactos'])
-    tab1, tab2, tab3 = st.tabs(['Vista previa', 'Calidad de datos', 'Visualización'])
-    with tab1:
-        st.dataframe(df.head(30), use_container_width=True)
-        st.caption('Solo se muestran 30 registros en pantalla; no se envían las filas originales a Gemini.')
-    with tab2:
-        st.dataframe(pd.DataFrame([{'Columna': c, 'Tipo': t,
-                                   'Nulos': datos['nulos_por_columna'][c]}
-                                  for c,t in datos['tipos'].items()]), hide_index=True)
-        st.json(datos['indicadores_numericos'])
-    with tab3:
-        nums = datos['columnas_numericas']
-        if nums:
-            elegido = st.selectbox('Variable numérica', nums)
-            st.plotly_chart(px.histogram(df, x=elegido, title=f'Distribución: {elegido}'), use_container_width=True)
-        else:
-            st.info('No se detectaron columnas numéricas para el histograma.')
-    st.download_button('Descargar perfil estadístico (JSON)',
-                       json.dumps(datos, indent=2, ensure_ascii=False).encode('utf-8'),
-                       'perfil_datos.json', 'application/json')
-
-    st.subheader('🤖 Red multiagente')
-    st.caption('Los agentes reciben un resumen calculado, no el archivo original. Evita datos confidenciales.')
-    try:
-        api_key = st.secrets.get('GEMINI_API_KEY', os.getenv('GEMINI_API_KEY', ''))
-    except Exception:
-        api_key = os.getenv('GEMINI_API_KEY', '')
-    modelo = st.text_input('Modelo Gemini habilitado en tu cuenta', value='gemini-2.5-flash-lite',
-                           help='Si el modelo no está disponible en tu nivel gratuito, cámbialo por otro permitido en AI Studio.')
-    if not api_key:
-        st.warning('Falta configurar GEMINI_API_KEY en los secretos de Streamlit Cloud.')
-    if st.button('Ejecutar los cuatro agentes', type='primary', disabled=not bool(api_key)):
-        with st.spinner('Consultando Gemini en cuatro etapas; cada etapa consume una solicitud...'):
-            try:
-                resultado = ejecutar_agentes(datos, api_key, modelo)
-                st.session_state['ultimo_informe'] = resultado
-                st.session_state['archivo_analizado'] = archivo.name
-            except Exception as exc:
-                st.error('No se completó el análisis. Comprueba el modelo, la cuota gratuita y los secretos. '
-                         + str(exc)[:450])
-    resultado = st.session_state.get('ultimo_informe')
-    if resultado and st.session_state.get('archivo_analizado') == archivo.name:
-        for slug, titulo in ETAPAS:
-            with st.expander(titulo, expanded=(slug=='informes')):
-                st.markdown(resultado.get(slug, 'Sin respuesta.'))
-        st.download_button('Descargar informe ejecutivo (.md)', resultado.get('informes', ''),
-                           file_name='informe_dataagents.md', mime='text/markdown')
-else:
-    st.markdown('### Cómo empezar\nCarga una base de datos de prueba para ver su perfil y activar la red multiagente.')
-st.divider()
-st.caption('Prototipo académico · No subir datos personales ni información institucional reservada.')
+from agents import ejecutar_agentes,ETAPAS
+from utils import cargar_archivo,perfil,limpiar
+from docx import Document
+from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from xml.sax.saxutils import escape
+st.set_page_config(page_title='DataAgents AI 2.0',page_icon='📊',layout='wide')
+st.title('DataAgents AI 2.0'); st.caption('Analítica multiagente · Gemini + Groq')
+def secreto(k):
+    try: return st.secrets.get(k,os.getenv(k,''))
+    except Exception: return os.getenv(k,'')
+claves={'Gemini':secreto('GEMINI_API_KEY'),'Groq':secreto('GROQ_API_KEY')}
+with st.sidebar:
+    st.header('Configuración')
+    for p,k in claves.items(): st.write(p+': '+('Configurado' if k else 'Sin clave'))
+    preferencia=st.radio('Proveedor preferido',['Gemini','Groq'])
+    g=st.text_input('Modelo Gemini','gemini-3.6-flash'); q=st.text_input('Modelo Groq','openai/gpt-oss-120b')
+    gm=[('Gemini',g),('Gemini','gemini-3.5-flash-lite')]; gr=[('Groq',q),('Groq','openai/gpt-oss-20b')]
+    modelos=list(dict.fromkeys(gm+gr if preferencia=='Gemini' else gr+gm))
+st.warning('Usa únicamente datos públicos o ficticios. Los resúmenes pueden incluir categorías textuales y se envían a proveedores externos. Las cuotas gratuitas son compartidas por los visitantes.')
+a=st.file_uploader('Cargar CSV, XLSX o JSON (máximo 10 MB)',type=['csv','xlsx','json'])
+if not a: st.stop()
+try: original=cargar_archivo(a); df,cambios=limpiar(original); datos=perfil(df); datos.pop('advertencia',None); datos['limpieza']=cambios
+except Exception as e: st.error('Archivo no procesable: '+str(e)); st.stop()
+firma=hashlib.sha256(a.getvalue()).hexdigest()
+if st.session_state.get('firma')!=firma:
+    st.session_state.firma=firma; st.session_state.estado={'resultados':{},'modelos':{},'eventos':[]}
+estado=st.session_state.estado
+for col,(label,v) in zip(st.columns(4),[('Registros',len(df)),('Columnas',len(df.columns)),('Nulos (%)',datos['porcentaje_nulos']),('Duplicados',datos['duplicados_exactos'])]): col.metric(label,v)
+t1,t2,t3,t4=st.tabs(['Datos','Calidad','Dashboard','Agentes e informe'])
+with t1:
+    st.dataframe(df.head(100)); st.download_button('Descargar datos depurados CSV',df.to_csv(index=False).encode('utf-8-sig'),'datos.csv')
+with t2:
+    st.write(cambios); st.json({'antes':perfil(original),'despues':datos})
+with t3:
+    for c in datos['columnas_numericas'][:4]: st.plotly_chart(px.histogram(df,x=c,title=c),use_container_width=True)
+    for c,f in datos['frecuencias_categoricas'].items():
+        if f: st.plotly_chart(px.bar(x=list(f),y=list(f.values()),labels={'x':c,'y':'Frecuencia'}),use_container_width=True)
+with t4:
+    st.caption('Los agentes reciben estadísticas y frecuencias, no todas las filas. No se realiza clasificación exhaustiva de sentimientos en esta versión.')
+    if st.button('Reiniciar análisis'): estado['resultados'].clear(); estado['modelos'].clear(); estado['eventos'].clear()
+    if st.button('Ejecutar / continuar agentes',disabled=not any(claves.values())):
+        barra=st.progress(len(estado['resultados'])/4); mensaje=st.empty()
+        def avance(t,p,m): barra.progress(len(estado['resultados'])/4); mensaje.info(f'{t} · {p} · {m}')
+        try:
+            ok=ejecutar_agentes(datos,claves,modelos,estado,avance); barra.progress(len(estado['resultados'])/4)
+            if ok: mensaje.success('Cuatro agentes completados')
+            else: mensaje.warning('Servicio no disponible o respuesta inválida. Puedes continuar sin repetir etapas completadas.')
+        except Exception: mensaje.error('No fue posible iniciar los proveedores. Revisa la configuración.')
+    for slug,titulo in ETAPAS:
+        if slug in estado['resultados']:
+            with st.expander(titulo,expanded=slug=='informes'):
+                st.caption(estado['modelos'][slug]); obj=estado['resultados'][slug]; st.write(obj['resumen']); st.write(obj['hallazgos'])
+    if estado['eventos']: st.dataframe(pd.DataFrame(estado['eventos'])); st.download_button('Registro de errores',pd.DataFrame(estado['eventos']).to_csv(index=False),'errores.csv')
+    if 'informes' in estado['resultados']:
+        obj=estado['resultados']['informes']; lineas=['DataAgents AI — Informe ejecutivo',obj['resumen']]+obj['hallazgos']; doc=Document(); doc.add_heading(lineas[0],0)
+        for l in lineas[1:]: doc.add_paragraph(l)
+        b=io.BytesIO(); doc.save(b); st.download_button('Informe Word',b.getvalue(),'informe.docx')
+        b=io.BytesIO(); styles=getSampleStyleSheet(); SimpleDocTemplate(b).build([Paragraph(escape(l),styles['BodyText']) for l in lineas]); st.download_button('Informe PDF',b.getvalue(),'informe.pdf')
+        b=io.BytesIO()
+        with pd.ExcelWriter(b,engine='openpyxl') as w:
+            df.to_excel(w,index=False,sheet_name='Datos'); pd.DataFrame({'Informe':lineas}).to_excel(w,index=False,sheet_name='Informe')
+        st.download_button('Informe Excel',b.getvalue(),'informe.xlsx')
+        st.download_button('Resultados JSON',json.dumps(estado,ensure_ascii=False,indent=2),'resultados.json')
