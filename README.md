@@ -1,23 +1,6 @@
-# DataAgents AI — Universidad del Valle
+# DataAgents AI 7.0
+Subir los archivos de este ZIP a la raíz del repositorio, incluida .streamlit/config.toml. Mantener los secretos de Streamlit existentes. Ejecutar con `streamlit run app.py`.
 
-Prototipo académico de sistema multiagente agnóstico a la estructura de datos. Analiza CSV, XLSX y JSON, calcula estadísticas con pandas y ejecuta cuatro roles secuenciales con Gemini.
+Motor local: ausencias condicionadas, comparaciones descriptivas, Pearson y Spearman, anomalías IQR/MAD/Z, normalización opcional de categorías por capitalización. Los umbrales son heurísticos, no pruebas de significancia. Se examinan hasta 20 variables numéricas y 20 categóricas de cardinalidad 2–30; se conservan hasta 30 patrones por tabla. Los agentes reciben evidencia agregada, no filas completas, previa autorización. No usar información sensible. La interpretación generativa requiere revisión humana.
 
-## Inicio en Streamlit Community Cloud
-1. Sube **los archivos de esta carpeta** a la raíz de tu repositorio GitHub (no la carpeta contenedora).
-2. En https://share.streamlit.io/ selecciona **Create app**, repositorio y rama `main`, y archivo principal `app.py`.
-3. En **Advanced settings → Secrets**, agrega `GEMINI_API_KEY = "TU_CLAVE_REAL"` y guarda. **Nunca subas el secreto a GitHub.**
-4. Despliega la app y carga un CSV/XLSX/JSON de prueba.
-
-## Ejecutar localmente (opcional)
-`pip install -r requirements.txt`
-`streamlit run app.py`
-
-Para ejecutar Gemini localmente, exporta la variable de entorno `GEMINI_API_KEY`.
-
-## Limitaciones de la versión inicial
-- Sin limpieza automática destructiva: detecta nulos, duplicados y encabezados problemáticos, y normaliza encabezados.
-- Análisis cualitativo avanzado y sentimiento aún pendientes.
-- No está validado para uso institucional con datos personales.
-- Gemini recibe resúmenes de datos y salidas previas; no recibe filas crudas.
-- Se necesita documentación empírica de pruebas A (ventas), B (PQR) y ruido (30% nulos).
-- Los límites del plan gratuito de Gemini pueden detener las solicitudes, sin recurrir automáticamente a facturación.
+Pruebas locales: compilación, motor sobre Brújula y Solicitudes, generación DOCX/PDF sin IA. No se verificó despliegue ni llamadas reales a proveedores. Los cruces siguen siendo opcionales y requieren confirmación.

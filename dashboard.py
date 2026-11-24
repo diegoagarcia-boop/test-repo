@@ -12,9 +12,11 @@ def generar(d):
         figs.append(px.pie(x,names='Categoría',values='Frecuencia',hole=.55,title='Composición: '+c) if 2<=len(x)<=8 else px.bar(x,x='Frecuencia',y='Categoría',orientation='h',title='Frecuencias: '+c))
     for n in nums[:2]:
         figs.extend([px.histogram(d,x=n,title='Distribución: '+n),px.box(d,y=n,title='Dispersión y extremos: '+n)])
+        lo,hi=d[n].quantile([.01,.99]); central=d[d[n].between(lo,hi)]
+        if hi>lo and (d[n].max()-d[n].min())>5*(hi-lo): figs.append(px.histogram(central,x=n,title=f'Vista central P1–P99: {n} ({len(central)} registros)'))
     if len(nums)>1:
-        figs.append(px.scatter(d.head(3000),x=nums[0],y=nums[1],title='Relación (primeras 3.000 filas)'))
-        co=d[nums[:10]].corr(min_periods=4); figs.append(px.imshow(co,zmin=-1,zmax=1,color_continuous_scale='RdBu_r',title='Correlaciones de Pearson'))
+        figs.append(px.scatter(d.sample(min(len(d),3000),random_state=42),x=nums[0],y=nums[1],title='Relación (muestra aleatoria de hasta 3.000 filas)'))
+        co=d[nums[:10]].corr(min_periods=4); figs.append(px.imshow(co,text_auto='.2f',zmin=-1,zmax=1,color_continuous_scale='RdBu_r',title='Correlaciones de Pearson'))
     dates=[c for c,r in p['roles'].items() if r=='Fecha']
     if dates:
         c=dates[0]; dt=pd.to_datetime(d[c].astype(str).str[:10],format='%Y-%m-%d',errors='coerce'); f=dt.dropna().dt.to_period('M').astype(str).value_counts().sort_index()

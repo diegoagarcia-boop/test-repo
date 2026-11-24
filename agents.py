@@ -13,7 +13,7 @@ async def solicitar(p,m,k,prompt):
     return obj
 
 def compacto(payload,slug):
-    keys={'auditor':['registros','nulos_por_columna','duplicados_exactos','alertas','roles'],'analista':['indicadores_numericos','frecuencias_categoricas','correlaciones'],'interprete':['roles','unicidad','frecuencias_categoricas'],'informes':['registros','nulos_por_columna','duplicados_exactos','indicadores_numericos']}[slug]
+    keys={'auditor':['registros','nulos_por_columna','duplicados_exactos','alertas','roles'],'analista':['indicadores_numericos','frecuencias_categoricas','correlaciones'],'interprete':['roles','unicidad','frecuencias_categoricas','indicadores_numericos','correlaciones'],'informes':['registros','nulos_por_columna','duplicados_exactos','indicadores_numericos']}[slug]
     return {'objetivo':payload['objetivo'],'relaciones':payload['relaciones_candidatas'],'tablas':{n:{k:p[k] for k in keys if k in p} for n,p in payload['tablas'].items()},'analitica':payload.get('analitica',[]),'transformaciones':payload['transformaciones'] if slug=='auditor' else {}}
 
 def ejecutar_agentes(resumen,claves,modelos,estado,progreso=lambda *a:None):
@@ -22,7 +22,7 @@ def ejecutar_agentes(resumen,claves,modelos,estado,progreso=lambda *a:None):
         async def uno(slug,titulo):
             if slug in estado['resultados']: return
             data=compacto(resumen,slug)
-            if slug=='informes': data['anteriores']=estado['resultados']
+            if slug in ('interprete','informes'): data['anteriores']=estado['resultados']
             raw=json.dumps(data,ensure_ascii=False,default=str)
             if len(raw)>28000:
                 estado['eventos'].append({'agente':titulo,'error':'Resumen excede presupuesto; análisis local disponible'}); return
@@ -35,7 +35,8 @@ def ejecutar_agentes(resumen,claves,modelos,estado,progreso=lambda *a:None):
                         estado['resultados'][slug]=obj; estado['modelos'][slug]=p+' / '+m; estado['tiempos'][slug]=round(time.monotonic()-t,2); progreso(titulo,'Completado',m); return
                     except Exception as ex:
                         estado['eventos'].append({'agente':titulo,'proveedor':p,'modelo':m,'error':getattr(getattr(ex,'response',None),'status_code',None) or type(ex).__name__,'segundos':round(time.monotonic()-t,2)})
-        await asyncio.gather(*(uno(*x) for x in ETAPAS[:3]))
+        await asyncio.gather(*(uno(*x) for x in ETAPAS[:2]))
+        await uno(*ETAPAS[2])
         await uno(*ETAPAS[3])
     try: asyncio.run(asyncio.wait_for(run(),115))
     except asyncio.TimeoutError: estado['eventos'].append({'error':'Tiempo global agotado; resultados parciales conservados'})

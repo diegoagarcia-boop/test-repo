@@ -6,3 +6,6 @@ PROMPTS={
 'informes':BASE+' Sintetiza decisiones y recomendaciones priorizadas, con evidencia y limitaciones. Evita repetir párrafos de agentes anteriores.'}
 for k in PROMPTS:
     PROMPTS[k]+=' Las frecuencias top son deliberadamente parciales: otras indica registros válidos fuera del listado, no datos faltantes. Las relaciones son candidatas, no confirmadas. No confundas repetición de clave foránea con duplicado de fila. No inventes indicadores de cruces no suministrados.'
+
+for k in PROMPTS:
+    PROMPTS[k]+=' Examina la evidencia de ausencia condicionada antes de recomendar limpieza. No imputes ausencias posiblemente estructurales. No confundas asociación con causalidad. Los atípicos no son errores confirmados. Si hay contradicciones con agentes previos, prioriza los cálculos locales y señala incertidumbre.'
