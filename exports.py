@@ -41,20 +41,10 @@ def exportar(original,df,antes,datos,estado):
             for col in ws.columns: ws.column_dimensions[col[0].column_letter].width=min(65,max(14,max(len(str(c.value or '')) for c in col)+2))
     out['xlsx']=b.getvalue(); return out
 
-def exportar_libro(original,tabs,resumen,perfiles,rel,estado):
-    titulo='DataAgents AI 5.0 - Informe integral'; doc=Document(); doc.add_heading(titulo,0); styles=getSampleStyleSheet(); story=[Paragraph(titulo,styles['Title'])];
-    def texto(s):
-        doc.add_paragraph(str(s)); story.append(Paragraph(escape(str(s)),styles['BodyText'])); story.append(Spacer(1,5))
-    texto('Resultados calculados por Python. Relaciones candidatas; narrativa IA no verificada automáticamente.')
-    for row in resumen.to_dict('records'): texto(' | '.join(f'{k}: {v}' for k,v in row.items()))
-    for k,p in perfiles.items():
-        texto(k)
-        for a in p['alertas']: texto(a)
-    for r in rel: texto(r)
-    for k,v in estado['resultados'].items():
-        texto(k+' / '+estado['modelos'][k]); texto(v['resumen']);
-        for h in v['hallazgos']: texto(h)
-    b=io.BytesIO(); doc.save(b); out={'docx':b.getvalue()}; b=io.BytesIO(); SimpleDocTemplate(b).build(story); out['pdf']=b.getvalue(); b=io.BytesIO()
+def exportar_libro(original,tabs,resumen,perfiles,rel,estado,objetivo='',archivo='',cambios=None):
+    from informes import documentos
+    out=documentos(resumen,perfiles,rel,estado,objetivo,archivo,cambios or {})
+    b=io.BytesIO()
     with pd.ExcelWriter(b,engine='openpyxl') as w:
         sheets={'Resumen':resumen,'Relaciones':pd.DataFrame(rel),'Calidad':pd.DataFrame([{'Tabla':k,**a} for k,p in perfiles.items() for a in p['alertas']]),'Agentes':pd.DataFrame([{'Agente':k,'Resumen':v['resumen'],'Hallazgos':'\n'.join(v['hallazgos'])} for k,v in estado['resultados'].items()]),'Eventos':pd.DataFrame(estado['eventos'])}
         for i,k in enumerate(tabs,1): sheets[f'Original_{i}']=original[k]; sheets[f'Depurado_{i}']=tabs[k]; sheets[f'Estadisticas_{i}']=pd.DataFrame(perfiles[k]['indicadores_numericos']).T.rename_axis('Variable').reset_index()

@@ -7,6 +7,7 @@ def generar(d):
     for c in cats[:2]:
         f=p['frecuencias_categoricas'][c]; labels=list(f['top']); vals=list(f['top'].values());
         if f['otras']: labels.append('Otras categorías (agrupadas)'); vals.append(f['otras'])
+        if len(vals)<2 or (len(set(vals))==1 and f['otras']==0): continue
         x=pd.DataFrame({'Categoría':labels,'Frecuencia':vals})
         figs.append(px.pie(x,names='Categoría',values='Frecuencia',hole=.55,title='Composición: '+c) if 2<=len(x)<=8 else px.bar(x,x='Frecuencia',y='Categoría',orientation='h',title='Frecuencias: '+c))
     for n in nums[:2]:
@@ -20,4 +21,5 @@ def generar(d):
         if len(f): figs.append(px.line(x=f.index,y=f.values,markers=True,labels={'x':'Mes','y':'Registros'},title=f'Evolución mensual: {c} ({dt.notna().sum()} fechas ISO válidas)'))
     if cats and nums:
         c,n=cats[0],nums[0]; f=d.groupby(c)[n].mean().dropna().nlargest(15); figs.append(px.bar(x=f.values,y=f.index.astype(str),orientation='h',labels={'x':'Media de '+n,'y':c},title='Media por categoría (top 15)'))
+    for fig in figs: fig.update_layout(height=320,margin=dict(l=35,r=20,t=55,b=35),paper_bgcolor="white",plot_bgcolor="white")
     return figs

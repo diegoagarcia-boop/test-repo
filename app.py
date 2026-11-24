@@ -7,8 +7,14 @@ from motor import cargar,perfil,relaciones,cruzar
 from utils import limpiar
 from agents import ejecutar_agentes,ETAPAS
 from exports import exportar_libro
-st.set_page_config(page_title='DataAgents AI 5.0',layout='wide')
-st.title('DataAgents AI 5.0'); st.caption('Analítica relacional · Calidad · Inteligencia multiagente')
+st.set_page_config(page_title='DataAgents AI 6.0',layout='wide')
+st.markdown("""<style>
+[data-testid="stSidebar"] {background:#0F172A;color:#F1F5F9}
+[data-testid="stSidebar"] label,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#E2E8F0}
+[data-testid="stMetric"] {background:white;border:1px solid #DCE4EF;border-radius:12px;padding:16px;box-shadow:0 2px 5px #0f172a0b}
+[data-testid="stExpander"] {background:white;border-radius:10px}
+</style>""",unsafe_allow_html=True)
+st.title('DataAgents AI 6.0'); st.caption('Analítica relacional · Calidad · Inteligencia multiagente')
 def secreto(k):
     try: return st.secrets.get(k,os.getenv(k,''))
     except Exception: return os.getenv(k,'')
@@ -36,7 +42,7 @@ consent=st.checkbox('Autorizo enviar resúmenes de datos públicos o ficticios a
 t1,t2,t3,t4,t5,t6=st.tabs(['General','Tablas y calidad','Relaciones','Analítica','Agentes','Informes'])
 with t1: st.dataframe(resumen,hide_index=True)
 with t2:
-    k=st.selectbox('Tabla',list(tabs)); st.dataframe(tabs[k].head(100)); st.dataframe(pd.DataFrame({'Rol':perfiles[k]['roles'],'Nulos antes':antes[k]['nulos_por_columna'],'Nulos después':perfiles[k]['nulos_por_columna'],'Valores únicos':perfiles[k]['unicidad']})); st.dataframe(pd.DataFrame(perfiles[k]['alertas'])); [st.write('• '+str(x)) for x in cambios[k]]
+    k=st.selectbox('Tabla',list(tabs)); st.dataframe(tabs[k].head(100)); st.dataframe(pd.DataFrame({'Rol':perfiles[k]['roles'],'Nulos antes':antes[k]['nulos_por_columna'],'Nulos después':perfiles[k]['nulos_por_columna'],'Valores únicos':perfiles[k]['unicidad']})); st.dataframe(pd.DataFrame(perfiles[k]['alertas'])); [st.write('• '+str(x)) for x in cambios[k] if x]
 with t3:
     st.caption('Relaciones candidatas por coincidencia de nombres y valores; confirme su significado antes de utilizar cruces.'); st.dataframe(pd.DataFrame(rel));
 with t4:
@@ -46,7 +52,8 @@ with t4:
         with st.expander(nombre,expanded=True):
             figs=generar(tabla)
             if not figs: st.info('Sin variables adecuadas para gráficos automáticos.')
-            for i,fig in enumerate(figs): st.plotly_chart(fig,use_container_width=True,key=f'auto_{nombre}_{i}')
+            for i in range(0,len(figs),2):
+                for col,j in zip(st.columns(2),range(i,min(i+2,len(figs)))): col.plotly_chart(figs[j],use_container_width=True,key=f'auto_{nombre}_{j}')
     st.header('Exploración y cruces opcionales')
     k2=st.selectbox('Tabla de análisis',list(tabs)); d=tabs[k2]; rr=[r for r in rel if r['hijo']==k2]; seleccion=st.multiselect('Relaciones autorizadas para cruzar',list(range(len(rr))),format_func=lambda i:f"{rr[i]['hijo']}.{rr[i]['foranea']} → {rr[i]['padre']}.{rr[i]['clave']}")
     if seleccion:
@@ -76,9 +83,11 @@ with t5:
             with st.expander(t,expanded=True):
                 st.caption(e['modelos'][slug]); st.write(e['resultados'][slug]['resumen']);
                 for h in e['resultados'][slug]['hallazgos']: st.write('• '+h)
-    st.dataframe(pd.DataFrame(e['eventos'])); st.caption('Tiempo máximo de espera IA: 115 segundos; puedes continuar resultados parciales.')
+    if e['eventos']: st.dataframe(pd.DataFrame(e['eventos']))
+    if e['tiempos']: st.dataframe(pd.DataFrame([{'Agente':k,'Segundos':v} for k,v in e['tiempos'].items()]),hide_index=True)
+    st.caption('Tiempo máximo de espera IA: 115 segundos; puedes continuar resultados parciales.')
 with t6:
     st.caption('Cifras calculadas por Python; narrativa de IA no verificada automáticamente.'); st.dataframe(resumen)
     if 'informes' in e['resultados']: st.write(e['resultados']['informes']['resumen'])
     if st.button('Preparar informes'):
-        for ext,b in exportar_libro(original,tabs,resumen,perfiles,rel,e).items(): st.download_button('Descargar '+ext.upper(),b,'informe.'+ext)
+        for ext,b in exportar_libro(original,tabs,resumen,perfiles,rel,e,objetivo,a.name,cambios).items(): st.download_button('Descargar '+ext.upper(),b,'informe.'+ext)
